@@ -552,12 +552,14 @@ def check_image(img, path):
   rendering -- where the magic happens
 '''
 g_net = None
+g_sess = None
 def stylize(content_img, style_imgs, init_img, frame=None):
   with tf.device(args.device), tf.Session() as sess:
     # setup network
     net = build_model(content_img)
-    global g_net
+    global g_net, g_sess
     g_net = net
+    g_sess = sess
     
     # style loss
     if args.style_mask:
@@ -613,15 +615,16 @@ def minimize_with_lbfgs(sess, net, optimizer, init_img):
   sess.run(net['input'].assign(init_img))
   optimizer.minimize(sess, step_callback=save_output_every_x_step)
 
-step = 0
-def save_output_every_x_step(*args, **kwargs):
-  step += 1
-  if step % args.save_every != 0 or step <= 1:
+g_step = 0
+def save_output_every_x_step(*a, **kw):
+  global g_step
+  g_step += 1
+  if g_step % args.save_every != 0 or g_step <= 1:
     return
   out_dir = os.path.join(args.img_output_dir, args.img_name)
   maybe_make_directory(out_dir)
-  output_img = sess.run(g_net['input'])
-  img_path = os.path.join(out_dir, args.img_name + f"iter={step}" + '.png')
+  output_img = g_sess.run(g_net['input'])
+  img_path = os.path.join(out_dir, args.img_name + f"iter={g_step}" + '.png')
   write_image(img_path, output_img)
 
 def minimize_with_adam(sess, net, optimizer, init_img, loss):
