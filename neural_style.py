@@ -7,6 +7,7 @@ import errno
 import time                       
 import cv2
 import os
+import random
 
 '''
   parsing and configuration
@@ -146,7 +147,7 @@ def parse_args():
     help='Learning rate parameter for the Adam optimizer. (default: %(default)s)')
   
   parser.add_argument('--max_iterations', type=int, 
-    default=1000,
+    default=random.randint(10, 20) * 100,
     help='Max number of iterations for the Adam or L-BFGS optimizer. (default: %(default)s)')
 
   parser.add_argument('--print_iterations', type=int, 
@@ -210,6 +211,10 @@ def parse_args():
   parser.add_argument('--frame_iterations', type=int, 
     default=800,
     help='Maximum number of optimizer iterations for each frame after the first frame. (default: %(default)s)')
+  
+  parser.add_argument('--save_every', type=int, 
+    default=200,
+    help='Save progress of style transfer every x iterations')
 
   args = parser.parse_args()
 
@@ -546,10 +551,13 @@ def check_image(img, path):
 '''
   rendering -- where the magic happens
 '''
+g_net = None
 def stylize(content_img, style_imgs, init_img, frame=None):
   with tf.device(args.device), tf.Session() as sess:
     # setup network
     net = build_model(content_img)
+    global g_net
+    g_net = net
     
     # style loss
     if args.style_mask:
@@ -583,7 +591,8 @@ def stylize(content_img, style_imgs, init_img, frame=None):
     optimizer = get_optimizer(L_total)
 
     if args.optimizer == 'adam':
-      minimize_with_adam(sess, net, optimizer, init_img, L_total)
+#       minimize_with_adam(sess, net, optimizer, init_img, L_total)
+      raise ValueError('Adam optimizer is disabled!')
     elif args.optimizer == 'lbfgs':
       minimize_with_lbfgs(sess, net, optimizer, init_img)
     
@@ -602,7 +611,18 @@ def minimize_with_lbfgs(sess, net, optimizer, init_img):
   init_op = tf.global_variables_initializer()
   sess.run(init_op)
   sess.run(net['input'].assign(init_img))
-  optimizer.minimize(sess)
+  optimizer.minimize(sess, step_callback=save_output_every_x_step)
+
+step = 0
+def save_output_every_x_step(*args, **kwargs):
+  step += 1
+  if step % save_every != 0 or step <= 1:
+    return
+  out_dir = os.path.join(args.img_output_dir, args.img_name)
+  maybe_make_directory(out_dir)
+  output_img = sess.run(g_net['input'])
+  img_path = os.path.join(out_dir, args.img_name + f"iter={step}" + '.png')
+  write_image(img_path, output_img)
 
 def minimize_with_adam(sess, net, optimizer, init_img, loss):
   if args.verbose: print('\nMINIMIZING LOSS USING: ADAM OPTIMIZER')
@@ -626,7 +646,8 @@ def get_optimizer(loss):
       options={'maxiter': args.max_iterations,
                   'disp': print_iterations})
   elif args.optimizer == 'adam':
-    optimizer = tf.train.AdamOptimizer(args.learning_rate)
+    raise ValueError('Adam optimizer is disabled!')
+#     optimizer = tf.train.AdamOptimizer(args.learning_rate)
   return optimizer
 
 def write_video_output(frame, output_img):
