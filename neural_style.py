@@ -616,7 +616,7 @@ def minimize_with_lbfgs(sess, net, optimizer, init_img):
 step = 0
 def save_output_every_x_step(*args, **kwargs):
   step += 1
-  if step % save_every != 0 or step <= 1:
+  if step % args.save_every != 0 or step <= 1:
     return
   out_dir = os.path.join(args.img_output_dir, args.img_name)
   maybe_make_directory(out_dir)
