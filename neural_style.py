@@ -551,15 +551,12 @@ def check_image(img, path):
 '''
   rendering -- where the magic happens
 '''
-g_net = None
-g_sess = None
+g_step = 0
+
 def stylize(content_img, style_imgs, init_img, frame=None):
   with tf.device(args.device), tf.Session() as sess:
     # setup network
     net = build_model(content_img)
-    global g_net, g_sess
-    g_net = net
-    g_sess = sess
     
     # style loss
     if args.style_mask:
@@ -613,20 +610,21 @@ def minimize_with_lbfgs(sess, net, optimizer, init_img):
   init_op = tf.global_variables_initializer()
   sess.run(init_op)
   sess.run(net['input'].assign(init_img))
-  optimizer.minimize(sess, step_callback=save_output_every_x_step)
+  optimizer.minimize(sess, step_callback=step_callback_func, loss_callback=save_output_every_x_step, fetches=[net])
 
-g_step = 0
-def save_output_every_x_step(*a, **kw):
-  global g_step
-  g_step += 1
+def save_output_every_x_step(net_e):
   if g_step % args.save_every != 0 or g_step <= 1:
     return
   out_dir = os.path.join(args.img_output_dir, args.img_name)
   maybe_make_directory(out_dir)
-  output_img = g_sess.run(g_net['input'])
+  output_img = net_e["input"]
   img_path = os.path.join(out_dir, args.img_name + f"iter={g_step}" + '.png')
   write_image(img_path, output_img)
 
+def step_callback_func(*a, **kw):
+  global g_step
+  g_step += 1
+  
 def minimize_with_adam(sess, net, optimizer, init_img, loss):
   if args.verbose: print('\nMINIMIZING LOSS USING: ADAM OPTIMIZER')
   train_op = optimizer.minimize(loss)
